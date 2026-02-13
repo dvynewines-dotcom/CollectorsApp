@@ -1,0 +1,281 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UniverseType {
+  CATEGORY
+  IP
+  LINE
+  SET
+  BRAND
+}
+
+enum LayoutType {
+  SHELF
+  WALL
+  VAULT
+}
+
+enum DropStatus {
+  PENDING
+  APPROVED
+}
+
+model User {
+  id             String          @id @default(cuid())
+  name           String?
+  email          String?         @unique
+  emailVerified  DateTime?
+  image          String?
+  handle         String          @unique
+  bio            String?
+  banner         String?
+  avatar         String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  accounts       Account[]
+  sessions       Session[]
+  follows        FollowUser[]    @relation("follower")
+  followers      FollowUser[]    @relation("following")
+  followedUniverses FollowUniverse[]
+  ownedInstances OwnedInstance[]
+  wantlist       Wantlist[]
+  rooms          Room[]
+  posts          Post[]
+  likes          Like[]
+  comments       Comment[]
+  drops          Drop[]          @relation("dropSubmitter")
+  reports        Report[]
+}
+
+model FollowUser {
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+  follower    User     @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+}
+
+model Universe {
+  id          String          @id @default(cuid())
+  name        String
+  slug        String          @unique
+  type        UniverseType
+  description String?
+  parentId    String?
+  parent      Universe?       @relation("UniverseTree", fields: [parentId], references: [id])
+  children    Universe[]      @relation("UniverseTree")
+  followers   FollowUniverse[]
+  items       ItemUniverse[]
+  drops       Drop[]
+  posts       PostAttachment[]
+  createdAt   DateTime        @default(now())
+
+  @@index([parentId])
+}
+
+model FollowUniverse {
+  userId     String
+  universeId String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  universe   Universe @relation(fields: [universeId], references: [id], onDelete: Cascade)
+
+  @@id([userId, universeId])
+}
+
+model Item {
+  id                 String         @id @default(cuid())
+  title              String
+  description        String?
+  images             String[]
+  attributes         Json
+  identifiers        Json
+  manufacturer       String
+  releaseYear        Int
+  estimatedValueLow  Float
+  estimatedValueHigh Float
+  liquidityScore     Float
+  rarityScore        Float
+  universes          ItemUniverse[]
+  ownedInstances     OwnedInstance[]
+  wantlist           Wantlist[]
+  postAttachments    PostAttachment[]
+  createdAt          DateTime       @default(now())
+
+  @@index([title])
+}
+
+model ItemUniverse {
+  itemId     String
+  universeId String
+  item       Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  universe   Universe @relation(fields: [universeId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, universeId])
+}
+
+model OwnedInstance {
+  id             String           @id @default(cuid())
+  userId         String
+  itemId         String
+  condition      String
+  gradingCompany String?
+  grade          String?
+  purchasePrice  Float?
+  notes          String?
+  photos         String[]
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item           Item             @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  rooms          RoomItem[]
+  attachments    PostAttachment[]
+  createdAt      DateTime         @default(now())
+}
+
+model Wantlist {
+  id        String   @id @default(cuid())
+  userId    String
+  itemId    String
+  note      String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemId])
+}
+
+model Room {
+  id              String     @id @default(cuid())
+  userId          String
+  title           String
+  theme           String
+  layoutType      LayoutType
+  backgroundStyle String
+  createdAt       DateTime   @default(now())
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roomItems       RoomItem[]
+  comments        Comment[]
+  likes           Like[]
+}
+
+model RoomItem {
+  roomId            String
+  ownedInstanceId   String
+  position          Int
+  room              Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  ownedInstance     OwnedInstance @relation(fields: [ownedInstanceId], references: [id], onDelete: Cascade)
+
+  @@id([roomId, ownedInstanceId])
+  @@index([roomId, position])
+}
+
+model Post {
+  id          String           @id @default(cuid())
+  userId      String
+  text        String
+  createdAt   DateTime         @default(now())
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachments PostAttachment[]
+  likes       Like[]
+  comments    Comment[]
+}
+
+model PostAttachment {
+  id               String         @id @default(cuid())
+  postId           String
+  universeId       String?
+  itemId           String?
+  ownedInstanceId  String?
+  post             Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
+  universe         Universe?      @relation(fields: [universeId], references: [id], onDelete: SetNull)
+  item             Item?          @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  ownedInstance    OwnedInstance? @relation(fields: [ownedInstanceId], references: [id], onDelete: SetNull)
+}
+
+model Like {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String?
+  roomId    String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  room      Room?    @relation(fields: [roomId], references: [id], onDelete: Cascade)
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String?
+  roomId    String?
+  text      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  room      Room?    @relation(fields: [roomId], references: [id], onDelete: Cascade)
+}
+
+model Drop {
+  id          String     @id @default(cuid())
+  title       String
+  universeId  String
+  date        DateTime
+  link        String
+  description String
+  status      DropStatus @default(PENDING)
+  submitterId String
+  universe    Universe   @relation(fields: [universeId], references: [id], onDelete: Cascade)
+  submitter   User       @relation("dropSubmitter", fields: [submitterId], references: [id], onDelete: Cascade)
+}
+
+model Report {
+  id         String   @id @default(cuid())
+  userId     String
+  targetType String
+  targetId   String
+  reason     String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
